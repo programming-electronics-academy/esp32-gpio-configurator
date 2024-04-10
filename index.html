@@ -1,0 +1,542 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>ESP32 GPIO Pin Configurator</title>
+<style>
+	body {
+		font-family: 'Arial', sans-serif;
+		font-size: 16px;
+		padding: 20px;
+		background-color: #f9f9f9;
+		color: #333;
+	}
+	button {
+		background-color: #4CAF50; /* Green */
+		border: none;
+		color: white;
+		padding: 10px 20px;
+		text-align: center;
+		text-decoration: none;
+		display: inline-block;
+		font-size: 16px;
+		margin: 4px 2px;
+		cursor: pointer;
+		border-radius: 5px;
+		transition: background-color 0.3s ease;
+	}
+	button:hover {
+		background-color: #33cc33;
+	}
+	.button-save {
+		background-color: #2222cc;
+	}
+	.button-save:hover {
+		background-color: #5500ff;
+	}
+	.button-sensitive {
+		background-color: #cc1111;
+	}
+	.button-sensitive:hover {
+		background-color: #ff0000;
+	}
+	input[type="text"], select {
+    padding: 10px;
+    margin: 5px 0;
+    border: 1px solid #ccc;
+    border-radius: 4px;
+    box-sizing: border-box;
+	}
+	h1, h3 {
+		color: #333;
+		text-align: center;
+		margin-top: -20px;
+	}
+	.directions {
+		text-align: center;
+		margin-top: -20px;
+	}
+	#deviceName {
+		margin-right: 20px;
+	}
+	#pinCount {
+		margin-right: 20px;
+	}
+	
+
+	.device-signal:hover {
+		background-color: #f5f5f5;
+	}
+
+    .separator {
+        margin-top: 20px;
+        border-bottom: 2px solid #000;
+    }
+    .device-config {
+        margin-top: 20px;
+        display: table;
+        <!-- width: 90%; -->
+		
+		border-collapse: collapse;
+		width: 100%;
+		box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+		border-radius: 8px;
+		overflow: hidden;
+    }
+    .device-config-header, .device-signal {
+        display: table-row;
+		background-color: #f2f2f2;
+    }
+    .signal-col, .header-col {
+        display: table-cell;
+        padding: 5px;
+        text-align: left;
+    }
+    .signal-description-input, .recommended-gpio-input {
+        width: 100%; /* Makes input fields take the full width of their container */
+    }
+    .signal-col:nth-child(1), .header-col:nth-child(1) { /* Select column */
+        width: 1%;
+        white-space: nowrap;
+    }
+    .signal-col:nth-child(2), .header-col:nth-child(2) { /* Device Signal column */
+        width: 8%;
+    }
+    .signal-col:nth-child(3), .header-col:nth-child(3) { /* Signal Description column */
+        width: 10%;
+    }
+    .signal-col:nth-child(4), .header-col:nth-child(4) { /* ESP32 GPIO Function column */
+        width: 8%;
+    }
+    .signal-col:nth-child(5), .header-col:nth-child(5) { /* Recommended GPIO Number column */
+        width: 10%;
+    }
+    .device-config-header .header-col {
+        font-weight: bold;
+		border-bottom: 1px solid #ddd;
+    }
+</style>
+</head>
+
+
+<body>
+<h1>ESP32 GPIO Pin Configurator</h1>
+<h3>Programming Electronics Academy &bull; <a href="https://programmingelectronics.com" target="_blank">ProgrammingElectronics.com</a></h3>
+<p class="directions">
+	<br/>
+	To begin, enter the name of a device, select the number of pins or signals the device requires, and click "Create Device".
+	<br/>
+	Then select the required GPIO functions for each pin or signal that the device will use.  Click "Save to File" to save your work.
+</p>
+
+<div class="separator"></div>
+<br/>
+
+<div id="deviceCreationSection">
+    <input type="text" id="deviceName" placeholder="Device or Signal Name">
+    <label for="pinCount"> # of Pins Required:</label>
+    <select id="pinCount">
+        <!-- JS will populate this -->
+    </select>
+    <button onclick="createDevice()">Create Device</button>
+	<span style="margin-left: 20px;"></span>
+	<button onclick="saveToFile()" class="button-save" id="saveButton" style="display:none;">Save to File</button>
+</div>
+<div class="separator"></div>
+
+<div id="deviceConfigurationSection" class="device-config">
+    <div class="device-config-header">
+        <div class="header-col">Select</div>
+        <div class="header-col">Device &amp; Signal</div>
+        <div class="header-col">Pin or Signal Description</div>
+        <div class="header-col">ESP32 GPIO Function</div>
+        <div class="header-col">Recommended GPIO Number</div>
+    </div>
+    <!-- Device configuration fields will be added here -->
+</div>
+<p/>
+<button onclick="addSignalToSelectedDevices()" id="addSignalButton" style="display:none;">Add Signal to Selected Devices</button>
+<span style="margin-left: 20px;"></span>
+<button onclick="deleteSelectedSignals()" id="deleteButton" class="button-sensitive" style="display:none;">Delete Signal from Selected Devices</button>
+<span style="margin-left: 20px;"></span>
+<button onclick="clearAll()" class="button-sensitive" id="clearAllButton" style="display:none;">Clear All</button>
+
+
+
+<script>
+
+let gpioArray = {
+    "Analog Input": {
+        "gpios": ["16", "14", "26", "33", "15", "32", "35", "25", "13", "39", "2", "34", "12", "36", "4"],
+        "multi": false
+    },
+    "Digital Input": {
+        "gpios": ["26", "22", "21", "25", "17", "27", "18", "34", "12", "36", "16", "14", "33", "15", "39", "2", "4", "23", "32", "35", "13", "5", "19"],
+        "multi": false
+    },
+    "Touch Input": {
+        "gpios": ["14", "33", "15", "32", "27", "13", "2", "12", "4"],
+        "multi": false
+    },
+    "Digital Output": {
+        "gpios": ["26", "22", "21", "25", "17", "27", "18", "12", "16", "14", "33", "15", "2", "4", "23", "32", "13", "5", "19"],
+        "multi": false
+    },
+    "PWM": {
+        "gpios": ["26", "22", "21", "25", "17", "27", "18", "12", "16", "14", "33", "15", "2", "4", "23", "32", "13", "5", "19"],
+        "multi": false
+    },
+    "RX_0": {
+        "gpios": ["3"],
+        "multi": false
+    },
+    "TX_0": {
+        "gpios": ["1"],
+        "multi": false
+    },
+    "RX_2": {
+        "gpios": ["16"],
+        "multi": false
+    },
+    "TX_2": {
+        "gpios": ["17"],
+        "multi": false
+    },
+    "SPI - CS": {
+        "gpios": ["5"],
+        "multi": false
+    },
+    "SPI - SCK": {
+        "gpios": ["18"],
+        "multi": false
+    },
+    "SPI - MISO": {
+        "gpios": ["19"],
+        "multi": false
+    },
+    "SPI - MOSI": {
+        "gpios": ["23"],
+        "multi": false
+    },
+    "I2C - SDA": {
+        "gpios": ["21"],
+        "multi": true
+    },
+    "I2C - SCL": {
+        "gpios": ["22"],
+        "multi": true
+    },
+    "GND": {
+        "gpios": ["GND"],
+        "multi": true
+    },
+    "5V": {
+        "gpios": ["5V"],
+        "multi": true
+    },
+    "3.3V": {
+        "gpios": ["3.3V"],
+        "multi": true
+    }
+}
+
+const defaultPinCount = 1;
+
+
+function addEventListenersToDropdowns() {
+    // Select all GPIO Function dropdowns
+    const dropdowns = document.querySelectorAll('.device-signal select');
+    
+    // Add a 'change' event listener to each dropdown
+    dropdowns.forEach(dropdown => {
+        dropdown.addEventListener('change', function() {
+            // Action to perform on dropdown value change
+            configureGPIOs();
+        });
+    });
+}
+
+
+function configureGPIOs() {
+    const deviceSignals = document.querySelectorAll('.device-signal');
+    const pinUsageTracker = {};
+
+    // Step 1: Populate requiredFunctions and initial recommendations
+    deviceSignals.forEach((signal, index) => {
+        const gpioFunction = signal.querySelector('select').value;
+        const supportedGPIOPins = gpioArray[gpioFunction].gpios;
+        const recommendedGpioInput = signal.querySelector('.recommended-gpio-input');
+        
+        recommendedGpioInput.value = supportedGPIOPins[0]; // Initial recommendation
+        
+        if (!pinUsageTracker[supportedGPIOPins[0]]) {
+            pinUsageTracker[supportedGPIOPins[0]] = { count: 1, indices: [index] };
+        } else {
+            pinUsageTracker[supportedGPIOPins[0]].count++;
+            pinUsageTracker[supportedGPIOPins[0]].indices.push(index);
+        }
+    });
+
+    // Step 2: Resolve conflicts
+    Object.keys(pinUsageTracker).forEach(gpioNumber => {
+        if (pinUsageTracker[gpioNumber].count > 1) {
+            resolveConflict(pinUsageTracker[gpioNumber].indices, gpioNumber);
+        }
+    });
+
+    function resolveConflict(conflictedIndices, gpioNumber) {
+        conflictedIndices.forEach(index => {
+            const signal = deviceSignals[index];
+            const gpioFunction = signal.querySelector('select').value;
+
+            // Skip if the function supports multiple signals (e.g., GND, 3.3V, 5V)
+            if (gpioArray[gpioFunction].multi) return;
+
+            // Attempt to find an alternative GPIO
+            const alternativeGpio = gpioArray[gpioFunction].gpios.find(g => g !== gpioNumber && (!pinUsageTracker[g] || pinUsageTracker[g].count === 0));
+            
+            if (alternativeGpio) {
+                signal.querySelector('.recommended-gpio-input').value = alternativeGpio;
+                pinUsageTracker[gpioNumber].count--;
+                if (pinUsageTracker[alternativeGpio]) {
+                    pinUsageTracker[alternativeGpio].count++;
+                } else {
+                    pinUsageTracker[alternativeGpio] = { count: 1, indices: [index] };
+                }
+            } else {
+                // Mark as conflict if no alternative is found
+                signal.querySelector('.recommended-gpio-input').value = 'No Pin Available';
+            }
+        });
+    }
+}
+
+
+
+<!-- function configureGPIOs(){ -->
+	<!-- // Retrieve all device signal rows -->
+    <!-- const deviceSignals = document.querySelectorAll('.device-signal'); -->
+
+    <!-- // Iterate over each device signal row -->
+    <!-- deviceSignals.forEach(signal => { -->
+        <!-- // Get the selected GPIO function for the current row -->
+        <!-- const gpioFunction = signal.querySelector('select').value; -->
+
+        <!-- // Find the GPIO numbers that support the selected function -->
+        <!-- const supportedGPIOPins = gpioArray[gpioFunction].gpios; -->
+
+        <!-- // Find the recommended GPIO input field for the current row -->
+        <!-- const recommendedGpioInput = signal.querySelector('.recommended-gpio-input'); -->
+
+        <!-- recommendedGpioInput.value = supportedGPIOPins[0]; -->
+    <!-- }); -->
+	
+<!-- } -->
+
+
+
+document.addEventListener('DOMContentLoaded', function() {
+    populatePinCountOptions();
+});
+
+function populatePinCountOptions() {
+    const pinCountSelector = document.getElementById('pinCount');
+    for (let i = 1; i <= 50; i++) {
+        const option = document.createElement('option');
+        option.value = i;
+        option.text = i;
+		// Set the default value
+        if (i === defaultPinCount) {
+            option.selected = true;
+        }
+        pinCountSelector.appendChild(option);
+    }
+}
+
+function createDevice() {
+    const deviceName = document.getElementById('deviceName').value.trim();
+    const pinCount = document.getElementById('pinCount').value;
+    const deviceConfigSection = document.getElementById('deviceConfigurationSection');
+    const saveButton = document.getElementById('saveButton');
+    const deleteButton = document.getElementById('deleteButton');
+    const addSignalButton = document.getElementById('addSignalButton');
+    const clearAllButton = document.getElementById('clearAllButton');
+
+    if (!deviceName || !pinCount) {
+        alert('Please enter a device name and select the number of GPIO pins required.');
+        return;
+    }
+
+    addDeviceSignals(deviceName, pinCount, deviceConfigSection);
+
+    saveButton.style.display = 'inline';
+    deleteButton.style.display = 'inline';
+    addSignalButton.style.display = 'inline';
+    clearAllButton.style.display = 'inline';
+
+    // Clear inputs after creation
+    document.getElementById('deviceName').value = '';
+    document.getElementById('pinCount').value = defaultPinCount;
+}
+
+function deleteSelectedSignals() {
+    const checkboxes = document.querySelectorAll('.signal-checkbox');
+    checkboxes.forEach(checkbox => {
+        if (checkbox.checked) {
+            checkbox.closest('.device-signal').remove(); // Use closest() to find the parent .device-signal div
+        }
+    });
+
+    // Renumber the remaining signals for each device
+    renumberDeviceSignals();
+
+    // Hide delete button if no signals are left
+    if (document.querySelectorAll('.device-signal').length === 0) {
+        document.getElementById('saveButton').style.display = 'none';
+        document.getElementById('deleteButton').style.display = 'none';
+        document.getElementById('addSignalButton').style.display = 'none';
+        document.getElementById('clearAllButton').style.display = 'none';
+    }
+}
+
+function addDeviceSignals(deviceName, pinCount, parentElement, insertAfter = null) {
+    for (let i = 0; i < pinCount; i++) {
+        const deviceSignalDiv = document.createElement('div');
+        deviceSignalDiv.className = 'device-signal';
+
+        // Create columns for each piece of data
+        ['checkbox', 'label', 'description', 'select', 'recommendedGPIO'].forEach((type) => {
+            const col = document.createElement('div');
+            col.className = 'signal-col';
+
+            if (type === 'checkbox') {
+                const checkbox = document.createElement('input');
+                checkbox.type = 'checkbox';
+                checkbox.className = 'signal-checkbox';
+                checkbox.setAttribute('data-device-name', deviceName);
+                col.appendChild(checkbox);
+            } else if (type === 'label') {
+                const label = document.createElement('label');
+                label.className = 'signal-label';
+                col.appendChild(label);
+            } else if (type === 'description') {
+                const input = document.createElement('input');
+                input.type = 'text';
+                input.className = 'signal-description-input';
+                input.placeholder = 'Pin or Signal Description';
+                col.appendChild(input);
+            } else if (type === 'select') {
+                const select = document.createElement('select');
+                const options = ['GND', '5V', '3.3V', 'Digital Input', 'Digital Output', 'Analog Input', 'PWM', 'Touch Input', 'RX_0', 'TX_0', 'RX_2', 'TX_2', 'I2C - SDA', 'I2C - SCL', 'SPI - MOSI', 'SPI - MISO', 'SPI - SCK', 'SPI - CS'];
+                options.forEach(optionValue => {
+                    const option = document.createElement('option');
+                    option.value = optionValue;
+                    option.text = optionValue;
+                    select.appendChild(option);
+                });
+                col.appendChild(select);
+            } else if (type === 'recommendedGPIO') {
+                const input = document.createElement('input');
+                input.type = 'text';
+                input.className = 'recommended-gpio-input';
+                input.placeholder = 'GPIO Number';
+                col.appendChild(input);
+            }
+
+            deviceSignalDiv.appendChild(col);
+        });
+
+        if (insertAfter) {
+            insertAfter.after(deviceSignalDiv);
+        } else {
+            parentElement.appendChild(deviceSignalDiv);
+        }
+		addEventListenersToDropdowns();
+    }
+
+    // Renumber signals after adding new ones
+    renumberDeviceSignals();
+	configureGPIOs();
+}
+
+function renumberDeviceSignals() {
+    const deviceSignals = document.querySelectorAll('.device-signal');
+    let currentDevice = '';
+    let signalCount = 1;
+
+    deviceSignals.forEach(signalDiv => {
+        const checkbox = signalDiv.querySelector('.signal-checkbox');
+        const deviceName = checkbox.getAttribute('data-device-name');
+        
+        if (deviceName !== currentDevice) {
+            currentDevice = deviceName;
+            signalCount = 1;
+        }
+
+        const label = signalDiv.querySelector('.signal-label');
+        label.textContent = `${deviceName} (signal ${signalCount}) `;
+        signalCount++;
+    });
+}
+
+function saveToFile() {
+    const deviceSignals = document.querySelectorAll('.device-signal');
+    let fileContent = "Device & Signal                    Pin or Signal Description      ESP32 GPIO Function           Recommended GPIO Number\n\n";
+    
+    let previousDevice = '';
+    deviceSignals.forEach(signalDiv => {
+        const checkbox = signalDiv.querySelector('.signal-checkbox');
+        const deviceName = checkbox.getAttribute('data-device-name');
+        if (deviceName !== previousDevice) {
+            if (previousDevice !== '') {
+                fileContent += "\n"; // Add a line break between different device groups
+            }
+            previousDevice = deviceName;
+        }
+        const signalLabel = signalDiv.querySelector('.signal-label').textContent.trim();
+        const signalDescription = signalDiv.querySelector('.signal-description-input').value.trim();
+        const gpioFunction = signalDiv.querySelector('select').value.trim();
+        const recommendedGPIO = signalDiv.querySelectorAll('.recommended-gpio-input')[0].value.trim(); // First input field for GPIO Number
+        
+        // Omit the Select column and pad each item to 25 characters for alignment
+        fileContent += `${signalLabel.padEnd(35)}${signalDescription.padEnd(30)}${gpioFunction.padEnd(30)}${recommendedGPIO.padEnd(30)}\n`;
+    });
+	
+	
+    if (confirm("Save configuration to text file?")) {
+		const blob = new Blob([fileContent], { type: 'text/plain' });
+		const anchor = document.createElement('a');
+		anchor.download = 'device_configuration.txt';
+		anchor.href = window.URL.createObjectURL(blob);
+		anchor.click();
+		window.URL.revokeObjectURL(anchor.href);
+    }
+	
+}
+
+function clearAll() {
+    if (confirm("Are you sure you want to delete all entries?")) {
+        window.location.reload();
+    }
+}
+
+function addSignalToSelectedDevices() {
+    const selectedCheckboxes = Array.from(document.querySelectorAll('.signal-checkbox:checked'));
+
+    selectedCheckboxes.forEach(checkbox => {
+        const parentDiv = checkbox.parentNode.parentNode; // Adjusted to account for the new table-like structure
+        const deviceName = checkbox.getAttribute('data-device-name');
+        const allSignalsOfDevice = Array.from(document.querySelectorAll(`.signal-checkbox[data-device-name="${deviceName}"]`));
+        const lastSignalOfDevice = allSignalsOfDevice[allSignalsOfDevice.length - 1].parentNode.parentNode; // Adjusted to account for the new table-like structure
+        
+        addDeviceSignals(deviceName, 1, null, lastSignalOfDevice);
+    });
+
+    // Ensure checkboxes stay unchecked after operation
+    selectedCheckboxes.forEach(checkbox => checkbox.checked = false);
+}
+
+</script>
+</body>
+</html>
